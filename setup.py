@@ -1,11 +1,10 @@
-## ! DO NOT MANUALLY INVOKE THIS setup.py, USE CATKIN INSTEAD
-
 from setuptools import setup
-from catkin_pkg.python_setup import generate_distutils_setup
+from setuptools import find_packages
 
-# fetch values from package.xml
-setup_args = generate_distutils_setup(
-    packages=['insta360_ros_driver'],
-    package_dir={'': 'src'})
-
-setup(**setup_args)
+setup(
+    name='insta360_ros2_driver',
+    version='0.0.1',  # Define your package version
+    packages= find_packages('src'),
+    package_dir={'': 'src'},
+    install_requires=['setuptools', 'rclpy', 'cv_bridge'],
+)
