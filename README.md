@@ -17,14 +17,14 @@ Then, the Insta360 libraries need to be installed as follows:
 Afterwards, install the other required dependencies and build
 ```
 rosdep install --from-paths src --ignore-src -r -y
-catkin build
+colcon build --symlink-install
 ```
 
 Before continuing, **make sure the camera is set to dual-lens mode**
 
 The Insta360 requires sudo privilege to be accessed via USB. To compensate for this, a udev configuration can be automatically created that will only request for sudo once. The camera can thus be setup initially via:
 ```
-rosrun insta360_ros_driver setup.sh
+sudo ./setup.sh
 ```
 This creates a symlink  based on the vendor ID of Insta360 cameras. The symlink, in this case <code>/dev/insta</code> is used to grant permissions to the usb port used by the camera.
 ![setup](docs/setup.png)
@@ -35,7 +35,7 @@ This driver directly publishes the video feed in YUV format, since that is the c
 ### Camera Bringup
 The camera can be brought up with the following launch file
 ```
-roslaunch insta360_ros_driver bringup.launch
+ros2 launch insta360_ros2_driver bringup.launch.py
 ```
 ![bringup](docs/bringup_rqt.png)
 This publishes the raw yuv and compressed images as the following topics
