@@ -91,16 +91,50 @@ public:
 
             if (avcodec_send_packet(codecCtx, pkt) == 0) {
                 while (avcodec_receive_frame(codecCtx, avFrame) == 0) {
+                    if (!avFrame || !avFrame->data[0] || !avFrame->data[1] || !avFrame->data[2]) {
+                        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Invalid frame data");
+                        continue;
+                    }
+
                     int width = avFrame->width;
                     int height = avFrame->height;
-                    int chromaHeight = height / 2;
-                    int chromaWidth = width / 2;
+                    int y_height = height;
+                    int uv_height = height / 2;
+                    int uv_width = width / 2;
 
-                    cv::Mat yuv(height + chromaHeight, width, CV_8UC1);
+                    // Allocate cv::Mat for YUV420P (no padding in the target buffer)
+                    cv::Mat yuv(height * 3 / 2, width, CV_8UC1);
+                    if (yuv.empty()) {
+                        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to allocate cv::Mat");
+                        continue;
+                    }
 
-                    memcpy(yuv.data, avFrame->data[0], width * height);
-                    memcpy(yuv.data + width * height, avFrame->data[1], chromaWidth * chromaHeight);
-                    memcpy(yuv.data + width * height + chromaWidth * chromaHeight, avFrame->data[2], chromaWidth * chromaHeight);
+                    // Copy Y (luma) plane
+                    for (int i = 0; i < y_height; i++) {
+                        memcpy(
+                            yuv.data + i * width,                            // Destination (row-by-row)
+                            avFrame->data[0] + i * avFrame->linesize[0],     // Source (account for padding)
+                            width                                            // Copy only the actual width
+                        );
+                    }
+
+                    // Copy U (chroma) plane
+                    for (int i = 0; i < uv_height; i++) {
+                        memcpy(
+                            yuv.data + y_height * width + i * uv_width,      // Destination (after Y plane)
+                            avFrame->data[1] + i * avFrame->linesize[1],     // Source (account for padding)
+                            uv_width                                         // Copy only the actual width
+                        );
+                    }
+
+                    // Copy V (chroma) plane
+                    for (int i = 0; i < uv_height; i++) {
+                        memcpy(
+                            yuv.data + y_height * width + uv_height * uv_width + i * uv_width,  // Destination
+                            avFrame->data[2] + i * avFrame->linesize[2],                        // Source
+                            uv_width                                                            // Copy only the actual width
+                        );
+                    }
 
                     sensor_msgs::msg::Image msg;
                     msg.header.stamp = rclcpp::Clock().now();
@@ -108,10 +142,9 @@ public:
                     msg.height = yuv.rows;
                     msg.width = yuv.cols;
                     msg.encoding = "8UC1";
-                    msg.is_bigendian = false;
+                    msg.is_bigendian = 0;
                     msg.step = yuv.cols * yuv.elemSize();
                     msg.data.assign(yuv.datastart, yuv.dataend);
-
                     image_pub->publish(msg);
                 }
             }
@@ -130,24 +163,24 @@ private:
 public:
     CameraWrapper(int argc, char* argv[]) {
         rclcpp::init(argc, argv);
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Opened Camera");
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Opened Camera");
     }
 
     ~CameraWrapper() {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Closing Camera");
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Closing Camera");
         if (this->cam) {
             this->cam->Close();
         }
     }
 
-    int run_camera() {
+   int run_camera() {
         ins_camera::DeviceDiscovery discovery;
         auto list = discovery.GetAvailableDevices();
         for (int i = 0; i < list.size(); ++i) {
             auto desc = list[i];
             std::cout << "serial:" << desc.serial_number << "\t"
-                      << "camera type:" << int(desc.camera_type) << "\t"
-                      << "lens type:" << int(desc.lens_type) << std::endl;
+                << "camera type:" << int(desc.camera_type) << "\t"
+                << "lens type:" << int(desc.lens_type) << std::endl;
         }
 
         if (list.size() <= 0) {
@@ -160,32 +193,30 @@ public:
             std::cerr << "failed to open camera" << std::endl;
             return -1;
         }
-
-        std::cout << "http base url:" << this->cam->GetHttpBaseUrl() << std::endl;
+        std::cout << "http base url:" << cam->GetHttpBaseUrl() << std::endl;
 
         auto node = rclcpp::Node::make_shared("insta_camera_node");
         
         // Pass the node to the TestStreamDelegate
         std::shared_ptr<ins_camera::StreamDelegate> delegate = std::make_shared<TestStreamDelegate>(node);
-        
-        this->cam->SetStreamDelegate(delegate);
-
+        cam->SetStreamDelegate(delegate);
         discovery.FreeDeviceDescriptors(list);
-
         std::cout << "Successfully opened camera..." << std::endl;
-
+        auto camera_type = cam->GetCameraType();
         auto start = time(NULL);
-        this->cam->SyncLocalTimeToCamera(start);
-
+        cam->SyncLocalTimeToCamera(start);
         ins_camera::LiveStreamParam param;
-        param.video_resolution = ins_camera::VideoResolution::RES_1152_1152P30;
+        // param.video_resolution = ins_camera::VideoResolution::RES_1152_1152P30;
+        // param.video_bitrate = 1024 * 1024 / 1000;
+        // param.enable_audio = false;
+        // param.using_lrv = false;
+        // param.video_resolution = ins_camera::VideoResolution::RES_720_360P30;
+        // param.lrv_video_resulution = ins_camera::VideoResolution::RES_720_360P30;
         param.video_bitrate = 1024 * 1024 / 100;
         param.enable_audio = false;
         param.using_lrv = false;
-
-        do {
-        } while (!this->cam->StartLiveStreaming(param));
-
+        
+        do {} while (!cam->StartLiveStreaming(param));
         std::cout << "successfully started live stream" << std::endl;
         rclcpp::spin(node);
         return 0;
@@ -202,7 +233,7 @@ int main(int argc, char* argv[]) {
 
     CameraWrapper camera(argc, argv);
     int result = camera.run_camera();
-
+        
     rclcpp::shutdown();
     return result;
 }
