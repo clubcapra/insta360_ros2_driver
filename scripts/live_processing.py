@@ -45,7 +45,7 @@ class LiveProcessing(Node):
         balance = 1.0
         image_scale = 1.0
 
-        h, w = 1152, 2304  # Hardcoded image size for Insta360 X3
+        h, w = 1440, 2880  # Hardcoded image size for Insta360 X4
         if not distortion_with_balance:
             # Generate undistortion maps for front and back cameras with the same resolution
             self.map1_front, self.map2_front = cv2.fisheye.initUndistortRectifyMap(self.K, self.D, np.eye(3), self.K, (w // 2, h), cv2.CV_32FC1)
