@@ -67,11 +67,8 @@ ament_python_install_package(${PROJECT_NAME})
 
 # Install Python scripts
 install(PROGRAMS
-  scripts/compression.py
-  scripts/undistortion.py
   scripts/live_processing.py
   scripts/get_images.py
-  scripts/record.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
