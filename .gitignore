@@ -5,6 +5,11 @@ include/*
 .vscode
 *.pyc
 
+install/*
+build/*
+log/*
+*.h264
+
 !bag/raw/.gitkeep
 !bag/compressed/.gitkeep
 !bag/undistorted/.gitkeep
